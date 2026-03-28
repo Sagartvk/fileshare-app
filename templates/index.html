@@ -14,24 +14,23 @@
         <header class="hero">
             <div>
                 <h1>Sagar File Share</h1>
-                <p>Upload, download, and manage files from any device.</p>
+                <p>Fast local file sharing for phone and laptop.</p>
             </div>
             <div class="badge">Ubuntu + Flask</div>
         </header>
 
-        {% with messages = get_flashed_messages() %}
-            {% if messages %}
-                <div class="flash-wrap">
-                    {% for message in messages %}
-                        <div class="flash-msg">{{ message }}</div>
-                    {% endfor %}
-                </div>
-            {% endif %}
-        {% endwith %}
+        <section class="card quick-share-card">
+            <h2>Quick Connect</h2>
+            <p class="share-url" id="shareUrl">{{ server_url }}</p>
+            <div class="quick-actions">
+                <button class="copy-btn" onclick="copyLink()">Copy Link</button>
+            </div>
+        </section>
 
         <section class="card upload-card">
             <h2>Upload Files</h2>
-            <form action="{{ url_for('upload_file') }}" method="POST" enctype="multipart/form-data">
+
+            <form id="uploadForm" enctype="multipart/form-data">
                 <label for="fileInput" class="drop-zone" id="dropZone">
                     <div class="drop-zone-content">
                         <div class="upload-icon">⬆</div>
@@ -44,6 +43,14 @@
 
                 <div id="filePreview" class="file-preview"></div>
 
+                <div class="progress-box" id="progressBox">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill">0%</div>
+                    </div>
+                </div>
+
+                <div id="statusMsg" class="status-msg"></div>
+
                 <button type="submit" class="primary-btn">Upload Now</button>
             </form>
         </section>
@@ -51,51 +58,57 @@
         <section class="card files-card">
             <div class="files-header">
                 <h2>Shared Files</h2>
-                <span class="file-count">{{ files|length }} files</span>
+                <span class="file-count" id="fileCount">{{ files|length }} files</span>
             </div>
 
-            {% if files %}
-                <div class="table-wrap">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>File Name</th>
-                                <th>Size</th>
-                                <th>Modified</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for file in files %}
-                            <tr>
-                                <td class="filename">{{ file.name }}</td>
-                                <td>{{ file.size }}</td>
-                                <td>{{ file.modified }}</td>
-                                <td class="actions">
-                                    <a class="download-btn" href="{{ url_for('download_file', filename=file.name) }}">Download</a>
-                                    <form action="{{ url_for('delete_file', filename=file.name) }}" method="POST" onsubmit="return confirm('Delete this file?');">
-                                        <button type="submit" class="delete-btn">Delete</button>
-                                    </form>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <div class="empty-state">
-                    <div class="empty-icon">📁</div>
-                    <h3>No files uploaded yet</h3>
-                    <p>Your uploaded files will appear here.</p>
-                </div>
-            {% endif %}
+            <div id="filesContainer">
+                {% if files %}
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>File Name</th>
+                                    <th>Size</th>
+                                    <th>Modified</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fileTableBody">
+                                {% for file in files %}
+                                <tr>
+                                    <td class="filename">{{ file.name }}</td>
+                                    <td>{{ file.size }}</td>
+                                    <td>{{ file.modified }}</td>
+                                    <td class="actions">
+                                        <a class="download-btn" href="/download/{{ file.name }}">Download</a>
+                                        <form action="/delete/{{ file.name }}" method="POST" onsubmit="return confirm('Delete this file?');">
+                                            <button type="submit" class="delete-btn">Delete</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="empty-state" id="emptyState">
+                        <div class="empty-icon">📁</div>
+                        <h3>No files uploaded yet</h3>
+                        <p>Your uploaded files will appear here.</p>
+                    </div>
+                {% endif %}
+            </div>
         </section>
     </div>
 
     <script>
-        const dropZone = document.getElementById("dropZone");
+        const uploadForm = document.getElementById("uploadForm");
         const fileInput = document.getElementById("fileInput");
         const filePreview = document.getElementById("filePreview");
+        const dropZone = document.getElementById("dropZone");
+        const progressBox = document.getElementById("progressBox");
+        const progressFill = document.getElementById("progressFill");
+        const statusMsg = document.getElementById("statusMsg");
 
         function updatePreview(files) {
             filePreview.innerHTML = "";
@@ -133,6 +146,124 @@
             fileInput.files = e.dataTransfer.files;
             updatePreview(fileInput.files);
         });
+
+        uploadForm.addEventListener("submit", function(e) {
+            e.preventDefault();
+
+            if (!fileInput.files.length) {
+                statusMsg.textContent = "Please select at least one file.";
+                statusMsg.className = "status-msg error";
+                return;
+            }
+
+            const formData = new FormData();
+            for (const file of fileInput.files) {
+                formData.append("files", file);
+            }
+
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", "/upload", true);
+
+            progressBox.style.display = "block";
+            progressFill.style.width = "0%";
+            progressFill.textContent = "0%";
+            statusMsg.textContent = "";
+
+            xhr.upload.addEventListener("progress", function(e) {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    progressFill.style.width = percent + "%";
+                    progressFill.textContent = percent + "%";
+                }
+            });
+
+            xhr.onload = function() {
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    if (xhr.status === 200) {
+                        statusMsg.textContent = response.message;
+                        statusMsg.className = "status-msg success";
+                        fileInput.value = "";
+                        filePreview.innerHTML = "";
+                        loadFiles();
+                    } else {
+                        statusMsg.textContent = response.message || "Upload failed.";
+                        statusMsg.className = "status-msg error";
+                    }
+                } catch {
+                    statusMsg.textContent = "Unexpected server response.";
+                    statusMsg.className = "status-msg error";
+                }
+            };
+
+            xhr.onerror = function() {
+                statusMsg.textContent = "Network error during upload.";
+                statusMsg.className = "status-msg error";
+            };
+
+            xhr.send(formData);
+        });
+
+        function copyLink() {
+            const text = document.getElementById("shareUrl").textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                alert("Link copied: " + text);
+            });
+        }
+
+        function loadFiles() {
+            fetch("/files")
+                .then(response => response.json())
+                .then(files => {
+                    const fileCount = document.getElementById("fileCount");
+                    const filesContainer = document.getElementById("filesContainer");
+                    fileCount.textContent = `${files.length} files`;
+
+                    if (!files.length) {
+                        filesContainer.innerHTML = `
+                            <div class="empty-state" id="emptyState">
+                                <div class="empty-icon">📁</div>
+                                <h3>No files uploaded yet</h3>
+                                <p>Your uploaded files will appear here.</p>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    let rows = "";
+                    files.forEach(file => {
+                        rows += `
+                            <tr>
+                                <td class="filename">${file.name}</td>
+                                <td>${file.size}</td>
+                                <td>${file.modified}</td>
+                                <td class="actions">
+                                    <a class="download-btn" href="/download/${encodeURIComponent(file.name)}">Download</a>
+                                    <form action="/delete/${encodeURIComponent(file.name)}" method="POST" onsubmit="return confirm('Delete this file?');">
+                                        <button type="submit" class="delete-btn">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        `;
+                    });
+
+                    filesContainer.innerHTML = `
+                        <div class="table-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>File Name</th>
+                                        <th>Size</th>
+                                        <th>Modified</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${rows}</tbody>
+                            </table>
+                        </div>
+                    `;
+                });
+        }
     </script>
 </body>
 </html>

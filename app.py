@@ -1,24 +1,18 @@
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory, flash
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory, flash, jsonify
 from werkzeug.utils import secure_filename
 import os
 from datetime import datetime
+import socket
 
 app = Flask(__name__)
 app.secret_key = "sagar_file_share_secret"
 
-# Detect Render environment
-if os.environ.get("RENDER") == "true":
-    UPLOAD_FOLDER = "/opt/render/project/src/uploads"
-else:
-    UPLOAD_FOLDER = "uploads"
-
-# 5 GB upload limit
-MAX_CONTENT_LENGTH = 5 * 1024 * 1024 * 1024
+UPLOAD_FOLDER = "uploads"
+MAX_CONTENT_LENGTH = 5 * 1024 * 1024 * 1024  # 5 GB
 
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 
-# Create upload folder if not exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
@@ -34,7 +28,6 @@ def get_files():
     files = []
     for filename in os.listdir(app.config["UPLOAD_FOLDER"]):
         file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-
         if os.path.isfile(file_path):
             stat = os.stat(file_path)
             files.append({
@@ -47,17 +40,28 @@ def get_files():
     return files
 
 
+def get_local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+
 @app.route("/")
 def index():
     files = get_files()
-    return render_template("index.html", files=files)
+    server_url = f"http://{get_local_ip()}:5000"
+    return render_template("index.html", files=files, server_url=server_url)
 
 
 @app.route("/upload", methods=["POST"])
 def upload_file():
     if "files" not in request.files:
-        flash("No files selected.")
-        return redirect(url_for("index"))
+        return jsonify({"success": False, "message": "No files selected."}), 400
 
     uploaded_files = request.files.getlist("files")
     uploaded_any = False
@@ -65,18 +69,14 @@ def upload_file():
     for file in uploaded_files:
         if file and file.filename:
             filename = secure_filename(file.filename)
-
             if filename:
                 save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
                 file.save(save_path)
                 uploaded_any = True
 
     if uploaded_any:
-        flash("File uploaded successfully.")
-    else:
-        flash("Please choose at least one valid file.")
-
-    return redirect(url_for("index"))
+        return jsonify({"success": True, "message": "File uploaded successfully."})
+    return jsonify({"success": False, "message": "Please choose at least one valid file."}), 400
 
 
 @app.route("/download/<path:filename>")
@@ -97,13 +97,15 @@ def delete_file(filename):
     return redirect(url_for("index"))
 
 
+@app.route("/files")
+def files_api():
+    return jsonify(get_files())
+
+
 @app.errorhandler(413)
 def too_large(e):
-    flash("File is too large. Maximum allowed size is 5 GB.")
-    return redirect(url_for("index"))
+    return jsonify({"success": False, "message": "File is too large. Maximum allowed size is 5 GB."}), 413
 
 
-# ✅ IMPORTANT FOR RENDER
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=5000, debug=True)
