@@ -86,35 +86,6 @@ body {
     font-size: 1.4rem;
 }
 
-.quick-share-card {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.share-url {
-    background: rgba(255,255,255,0.05);
-    padding: 14px;
-    border-radius: 12px;
-    color: #e2e8f0;
-    word-break: break-all;
-}
-
-.quick-actions {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-}
-
-.copy-btn {
-    border: none;
-    padding: 10px 16px;
-    border-radius: 10px;
-    background: #7c3aed;
-    color: #fff;
-    cursor: pointer;
-}
-
 .drop-zone {
     display: block;
     border: 2px dashed rgba(255,255,255,0.18);

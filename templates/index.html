@@ -19,14 +19,6 @@
             <div class="badge">Ubuntu + Flask</div>
         </header>
 
-        <section class="card quick-share-card">
-            <h2>Quick Connect</h2>
-            <p class="share-url" id="shareUrl">{{ server_url }}</p>
-            <div class="quick-actions">
-                <button class="copy-btn" onclick="copyLink()">Copy Link</button>
-            </div>
-        </section>
-
         <section class="card upload-card">
             <h2>Upload Files</h2>
 
@@ -203,13 +195,6 @@
 
             xhr.send(formData);
         });
-
-        function copyLink() {
-            const text = document.getElementById("shareUrl").textContent;
-            navigator.clipboard.writeText(text).then(() => {
-                alert("Link copied: " + text);
-            });
-        }
 
         function loadFiles() {
             fetch("/files")

@@ -2,7 +2,6 @@ from flask import Flask, render_template, request, redirect, url_for, send_from_
 from werkzeug.utils import secure_filename
 import os
 from datetime import datetime
-import socket
 
 app = Flask(__name__)
 app.secret_key = "sagar_file_share_secret"
@@ -40,22 +39,10 @@ def get_files():
     return files
 
 
-def get_local_ip():
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
-    except Exception:
-        return "127.0.0.1"
-
-
 @app.route("/")
 def index():
     files = get_files()
-    server_url = f"http://{get_local_ip()}:5000"
-    return render_template("index.html", files=files, server_url=server_url)
+    return render_template("index.html", files=files)
 
 
 @app.route("/upload", methods=["POST"])
@@ -76,6 +63,7 @@ def upload_file():
 
     if uploaded_any:
         return jsonify({"success": True, "message": "File uploaded successfully."})
+
     return jsonify({"success": False, "message": "Please choose at least one valid file."}), 400
 
 
